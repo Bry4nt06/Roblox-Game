@@ -1,9 +1,10 @@
-.DS_Store
+﻿.DS_Store
 Thumbs.db
-*.rbxl
-*.rbxlx
-*.rbxm
-*.rbxmx
 *.log
 .temp/
 .tmp/
+
+# Generated Rojo builds
+/build/
+*.generated.rbxl
+*.generated.rbxlx
