@@ -1,0 +1,17 @@
+{
+  "name": "Roblox Game",
+  "tree": {
+    "$className": "DataModel",
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$ignoreUnknownInstances": true,
+        "CinematicIntro": {
+          "$path": "src/client/CinematicIntro.client.luau"
+        }
+      }
+    }
+  }
+}
