@@ -3,25 +3,14 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+local camera = workspace.CurrentCamera or workspace:GetPropertyChangedSignal("CurrentCamera"):Wait() and workspace.CurrentCamera
 
 local RIG_NAME = "Rig"
+local CAMERA_MARKER_NAME = "IntroCamera"
+local TARGET_MARKER_NAME = "IntroCameraTarget"
 local CAMERA_FOV = 50
-local CAMERA_OFFSET = Vector3.new(11, 5.5, 16)
-local LOOK_OFFSET = Vector3.new(0, 1.75, 0)
-local DRIFT_YAW_DEGREES = 1.6
-local DRIFT_HEIGHT = 0.18
 local TRANSITION_TIME = 0.55
-
-local function getRigPivot(rig: Instance): CFrame?
-	if rig:IsA("Model") then
-		return rig:GetPivot()
-	end
-	if rig:IsA("BasePart") then
-		return rig.CFrame
-	end
-	return nil
-end
+local RENDER_STEP_NAME = "CinematicIntroCamera"
 
 local function getCharacterRoot(): BasePart?
 	local character = player.Character or player.CharacterAdded:Wait()
@@ -52,17 +41,31 @@ local function setControlsEnabled(enabled: boolean)
 	end
 end
 
+local function findMarker(name: string): BasePart?
+	local marker = workspace:FindFirstChild(name)
+	if marker and marker:IsA("BasePart") then
+		return marker
+	end
+	return nil
+end
+
 local rig = workspace:WaitForChild(RIG_NAME, 15)
 if not rig then
 	warn("[CinematicIntro] Workspace.Rig was not found; intro skipped")
 	return
 end
 
-local rigPivot = getRigPivot(rig)
-if not rigPivot then
-	warn("[CinematicIntro] Rig must be a Model or BasePart; intro skipped")
+local cameraMarker = findMarker(CAMERA_MARKER_NAME)
+local targetMarker = findMarker(TARGET_MARKER_NAME)
+
+if not cameraMarker or not targetMarker then
+	warn("[CinematicIntro] IntroCamera and IntroCameraTarget must exist in Workspace; intro skipped")
 	return
 end
+
+-- Keep the design markers visible in Studio edit mode, but hide them for the local player during play.
+cameraMarker.LocalTransparencyModifier = 1
+targetMarker.LocalTransparencyModifier = 1
 
 setControlsEnabled(false)
 
@@ -71,6 +74,11 @@ camera.CameraType = Enum.CameraType.Scriptable
 camera.FieldOfView = CAMERA_FOV
 
 local playerGui = player:WaitForChild("PlayerGui")
+local oldGui = playerGui:FindFirstChild("CinematicIntroGui")
+if oldGui then
+	oldGui:Destroy()
+end
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CinematicIntroGui"
 screenGui.IgnoreGuiInset = true
@@ -119,7 +127,6 @@ playButton.Font = Enum.Font.GothamBold
 playButton.Text = "PLAY"
 playButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 playButton.TextSize = 24
-playButton.TextTransparency = 0
 playButton.ZIndex = 10
 playButton.Parent = screenGui
 
@@ -141,21 +148,17 @@ gradient.Color = ColorSequence.new({
 })
 gradient.Parent = playButton
 
-local introStart = os.clock()
-local renderStepName = "CinematicIntroCamera"
-
-local function computeCameraCFrame(now: number): CFrame
-	local pivot = getRigPivot(rig) or rigPivot
-	local target = pivot.Position + LOOK_OFFSET
-	local yaw = math.rad(math.sin((now - introStart) * 0.35) * DRIFT_YAW_DEGREES)
-	local height = math.sin((now - introStart) * 0.5) * DRIFT_HEIGHT
-	local drift = CFrame.Angles(0, yaw, 0)
-	local cameraPosition = (pivot * drift * CFrame.new(CAMERA_OFFSET + Vector3.new(0, height, 0))).Position
-	return CFrame.lookAt(cameraPosition, target)
+local function markerCameraCFrame(): CFrame
+	local from = cameraMarker.Position
+	local target = targetMarker.Position
+	if (target - from).Magnitude < 0.05 then
+		return cameraMarker.CFrame
+	end
+	return CFrame.lookAt(from, target)
 end
 
-RunService:BindToRenderStep(renderStepName, Enum.RenderPriority.Camera.Value + 1, function()
-	camera.CFrame = computeCameraCFrame(os.clock())
+RunService:BindToRenderStep(RENDER_STEP_NAME, Enum.RenderPriority.Camera.Value + 1, function()
+	camera.CFrame = markerCameraCFrame()
 end)
 
 local function tweenButton(targetTransparency: number)
@@ -197,7 +200,7 @@ playButton.Activated:Connect(function()
 	tweenButton(1)
 
 	task.wait(0.24)
-	RunService:UnbindFromRenderStep(renderStepName)
+	RunService:UnbindFromRenderStep(RENDER_STEP_NAME)
 
 	local root = getCharacterRoot()
 	if root then
