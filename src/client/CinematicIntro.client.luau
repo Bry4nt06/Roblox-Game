@@ -67,7 +67,7 @@ local function findMarker(name: string): BasePart?
 	return nil
 end
 
-local function createMarker(name: string, position: Vector3): BasePart
+local function createMarker(name: string, cframe: CFrame): BasePart
 	local marker = Instance.new("Part")
 	marker.Name = name
 	marker.Size = Vector3.new(2, 2, 2)
@@ -76,7 +76,7 @@ local function createMarker(name: string, position: Vector3): BasePart
 	marker.CanTouch = false
 	marker.CanQuery = false
 	marker.Transparency = 0.35
-	marker.Position = position
+	marker.CFrame = cframe
 	marker.Parent = workspace
 	return marker
 end
@@ -93,21 +93,23 @@ if not rigPivot then
 	return
 end
 
-local cameraMarker = findMarker(CAMERA_MARKER_NAME)
 local targetMarker = findMarker(TARGET_MARKER_NAME)
-
-if not cameraMarker then
-	local defaultCameraPosition = (rigPivot * CFrame.new(12, 6, 18)).Position
-	cameraMarker = createMarker(CAMERA_MARKER_NAME, defaultCameraPosition)
-	warn("[CinematicIntro] IntroCamera was missing; created runtime default")
-end
-
 if not targetMarker then
-	local defaultTargetPosition = rigPivot.Position + Vector3.new(0, 2, 0)
-	targetMarker = createMarker(TARGET_MARKER_NAME, defaultTargetPosition)
+	local targetPosition = rigPivot.Position + Vector3.new(0, 2, 0)
+	targetMarker = createMarker(TARGET_MARKER_NAME, CFrame.new(targetPosition))
 	warn("[CinematicIntro] IntroCameraTarget was missing; created runtime default")
 end
 
+local cameraMarker = findMarker(CAMERA_MARKER_NAME)
+if not cameraMarker then
+	local targetPosition = targetMarker.Position
+	local cameraPosition = rigPivot.Position + Vector3.new(-18, 8, 24)
+	cameraMarker = createMarker(CAMERA_MARKER_NAME, CFrame.lookAt(cameraPosition, targetPosition))
+	warn("[CinematicIntro] IntroCamera was missing; created runtime default")
+end
+
+-- Marker CFrame is authoritative: its position and rotation are the exact menu shot.
+-- Hide markers only for the local player while testing/playing.
 cameraMarker.LocalTransparencyModifier = 1
 targetMarker.LocalTransparencyModifier = 1
 
@@ -192,17 +194,8 @@ gradient.Color = ColorSequence.new({
 })
 gradient.Parent = playButton
 
-local function markerCameraCFrame(): CFrame
-	local from = cameraMarker.Position
-	local target = targetMarker.Position
-	if (target - from).Magnitude < 0.05 then
-		return cameraMarker.CFrame
-	end
-	return CFrame.lookAt(from, target)
-end
-
 RunService:BindToRenderStep(RENDER_STEP_NAME, Enum.RenderPriority.Camera.Value + 1, function()
-	camera.CFrame = markerCameraCFrame()
+	camera.CFrame = cameraMarker.CFrame
 end)
 
 local function tweenButton(targetTransparency: number)
