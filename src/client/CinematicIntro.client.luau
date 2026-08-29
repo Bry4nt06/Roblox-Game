@@ -49,6 +49,16 @@ local function setControlsEnabled(enabled: boolean)
 	end
 end
 
+local function getPivot(instance: Instance): CFrame?
+	if instance:IsA("Model") then
+		return instance:GetPivot()
+	end
+	if instance:IsA("BasePart") then
+		return instance.CFrame
+	end
+	return nil
+end
+
 local function findMarker(name: string): BasePart?
 	local marker = workspace:FindFirstChild(name)
 	if marker and marker:IsA("BasePart") then
@@ -57,21 +67,47 @@ local function findMarker(name: string): BasePart?
 	return nil
 end
 
+local function createMarker(name: string, position: Vector3): BasePart
+	local marker = Instance.new("Part")
+	marker.Name = name
+	marker.Size = Vector3.new(2, 2, 2)
+	marker.Anchored = true
+	marker.CanCollide = false
+	marker.CanTouch = false
+	marker.CanQuery = false
+	marker.Transparency = 0.35
+	marker.Position = position
+	marker.Parent = workspace
+	return marker
+end
+
 local rig = workspace:WaitForChild(RIG_NAME, 15)
 if not rig then
 	warn("[CinematicIntro] Workspace.Rig was not found; intro skipped")
 	return
 end
 
-local cameraMarker = findMarker(CAMERA_MARKER_NAME)
-local targetMarker = findMarker(TARGET_MARKER_NAME)
-
-if not cameraMarker or not targetMarker then
-	warn("[CinematicIntro] IntroCamera and IntroCameraTarget must exist in Workspace; intro skipped")
+local rigPivot = getPivot(rig)
+if not rigPivot then
+	warn("[CinematicIntro] Rig must be a Model or BasePart; intro skipped")
 	return
 end
 
--- Markers remain visible in Studio edit mode but disappear for the local player during play.
+local cameraMarker = findMarker(CAMERA_MARKER_NAME)
+local targetMarker = findMarker(TARGET_MARKER_NAME)
+
+if not cameraMarker then
+	local defaultCameraPosition = (rigPivot * CFrame.new(12, 6, 18)).Position
+	cameraMarker = createMarker(CAMERA_MARKER_NAME, defaultCameraPosition)
+	warn("[CinematicIntro] IntroCamera was missing; created runtime default")
+end
+
+if not targetMarker then
+	local defaultTargetPosition = rigPivot.Position + Vector3.new(0, 2, 0)
+	targetMarker = createMarker(TARGET_MARKER_NAME, defaultTargetPosition)
+	warn("[CinematicIntro] IntroCameraTarget was missing; created runtime default")
+end
+
 cameraMarker.LocalTransparencyModifier = 1
 targetMarker.LocalTransparencyModifier = 1
 
