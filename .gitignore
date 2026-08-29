@@ -8,3 +8,4 @@ Thumbs.db
 /build/
 *.generated.rbxl
 *.generated.rbxlx
+*.rbxl.lock
