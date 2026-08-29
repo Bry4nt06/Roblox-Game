@@ -26,6 +26,13 @@
         }
       }
     },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$ignoreUnknownInstances": true,
+      "MenuRigKeeper": {
+        "$path": "src/server/MenuRigKeeper.server.luau"
+      }
+    },
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "$ignoreUnknownInstances": true,
