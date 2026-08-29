@@ -19,6 +19,7 @@ local TARGET_MARKER_NAME = "IntroCameraTarget"
 local CAMERA_FOV = 50
 local TRANSITION_TIME = 0.55
 local RENDER_STEP_NAME = "CinematicIntroCamera"
+local MARKER_WAIT_TIME = 2.5
 
 local function getCharacterRoot(): BasePart?
 	local character = player.Character or player.CharacterAdded:Wait()
@@ -59,6 +60,19 @@ local function getPivot(instance: Instance): CFrame?
 	return nil
 end
 
+local function isMarkerName(name: string): boolean
+	return name == CAMERA_MARKER_NAME or name == TARGET_MARKER_NAME
+end
+
+local function hideMarker(marker: BasePart)
+	marker.Transparency = 1
+	marker.LocalTransparencyModifier = 1
+	marker.CanCollide = false
+	marker.CanTouch = false
+	marker.CanQuery = false
+	marker.CastShadow = false
+end
+
 local function findMarker(name: string): BasePart?
 	local marker = workspace:FindFirstChild(name)
 	if marker and marker:IsA("BasePart") then
@@ -67,7 +81,24 @@ local function findMarker(name: string): BasePart?
 	return nil
 end
 
-local function createMarker(name: string, cframe: CFrame): BasePart
+local function waitForMarker(name: string, timeout: number): BasePart?
+	local existing = findMarker(name)
+	if existing then
+		return existing
+	end
+
+	local deadline = os.clock() + timeout
+	while os.clock() < deadline do
+		task.wait(0.05)
+		existing = findMarker(name)
+		if existing then
+			return existing
+		end
+	end
+	return nil
+end
+
+local function createRuntimeMarker(name: string, cframe: CFrame): BasePart
 	local marker = Instance.new("Part")
 	marker.Name = name
 	marker.Size = Vector3.new(2, 2, 2)
@@ -75,9 +106,11 @@ local function createMarker(name: string, cframe: CFrame): BasePart
 	marker.CanCollide = false
 	marker.CanTouch = false
 	marker.CanQuery = false
-	marker.Transparency = 0.35
+	marker.CastShadow = false
+	marker.Transparency = 1
 	marker.CFrame = cframe
 	marker.Parent = workspace
+	marker.LocalTransparencyModifier = 1
 	return marker
 end
 
@@ -93,25 +126,52 @@ if not rigPivot then
 	return
 end
 
-local targetMarker = findMarker(TARGET_MARKER_NAME)
+-- Give Rojo / Studio-authored camera markers a moment to appear before using fallbacks.
+local cameraMarker = waitForMarker(CAMERA_MARKER_NAME, MARKER_WAIT_TIME)
+local targetMarker = waitForMarker(TARGET_MARKER_NAME, 0.5)
+
 if not targetMarker then
 	local targetPosition = rigPivot.Position + Vector3.new(0, 2, 0)
-	targetMarker = createMarker(TARGET_MARKER_NAME, CFrame.new(targetPosition))
-	warn("[CinematicIntro] IntroCameraTarget was missing; created runtime default")
+	targetMarker = createRuntimeMarker(TARGET_MARKER_NAME, CFrame.new(targetPosition))
+	warn("[CinematicIntro] IntroCameraTarget was missing; created hidden runtime default")
 end
 
-local cameraMarker = findMarker(CAMERA_MARKER_NAME)
 if not cameraMarker then
 	local targetPosition = targetMarker.Position
 	local cameraPosition = rigPivot.Position + Vector3.new(-18, 8, 24)
-	cameraMarker = createMarker(CAMERA_MARKER_NAME, CFrame.lookAt(cameraPosition, targetPosition))
-	warn("[CinematicIntro] IntroCamera was missing; created runtime default")
+	cameraMarker = createRuntimeMarker(CAMERA_MARKER_NAME, CFrame.lookAt(cameraPosition, targetPosition))
+	warn("[CinematicIntro] IntroCamera was missing; created hidden runtime default")
 end
 
--- Marker CFrame is authoritative: its position and rotation are the exact menu shot.
--- Hide markers only for the local player while testing/playing.
-cameraMarker.LocalTransparencyModifier = 1
-targetMarker.LocalTransparencyModifier = 1
+hideMarker(cameraMarker)
+hideMarker(targetMarker)
+
+-- If Rojo or another Studio system inserts/replaces either marker after startup,
+-- hide it immediately. A late real IntroCamera becomes authoritative automatically.
+local markerAddedConnection = workspace.ChildAdded:Connect(function(child)
+	if not child:IsA("BasePart") or not isMarkerName(child.Name) then
+		return
+	end
+
+	task.defer(function()
+		if not child.Parent then
+			return
+		end
+		hideMarker(child)
+		if child.Name == CAMERA_MARKER_NAME then
+			cameraMarker = child
+		elseif child.Name == TARGET_MARKER_NAME then
+			targetMarker = child
+		end
+	end)
+end)
+
+-- Also hide duplicate marker-named parts that may already exist.
+for _, child in workspace:GetChildren() do
+	if child:IsA("BasePart") and isMarkerName(child.Name) then
+		hideMarker(child)
+	end
+end
 
 setControlsEnabled(false)
 
@@ -195,7 +255,9 @@ gradient.Color = ColorSequence.new({
 gradient.Parent = playButton
 
 RunService:BindToRenderStep(RENDER_STEP_NAME, Enum.RenderPriority.Camera.Value + 1, function()
-	camera.CFrame = cameraMarker.CFrame
+	if cameraMarker and cameraMarker.Parent then
+		camera.CFrame = cameraMarker.CFrame
+	end
 end)
 
 local function tweenButton(targetTransparency: number)
@@ -238,6 +300,7 @@ playButton.Activated:Connect(function()
 
 	task.wait(0.24)
 	RunService:UnbindFromRenderStep(RENDER_STEP_NAME)
+	markerAddedConnection:Disconnect()
 
 	local root = getCharacterRoot()
 	if root then
