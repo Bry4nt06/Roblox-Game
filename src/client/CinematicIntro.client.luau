@@ -3,7 +3,15 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera or workspace:GetPropertyChangedSignal("CurrentCamera"):Wait() and workspace.CurrentCamera
+local camera = workspace.CurrentCamera
+if not camera then
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+	camera = workspace.CurrentCamera
+end
+if not camera then
+	warn("[CinematicIntro] Workspace.CurrentCamera was not available; intro skipped")
+	return
+end
 
 local RIG_NAME = "Rig"
 local CAMERA_MARKER_NAME = "IntroCamera"
@@ -63,7 +71,7 @@ if not cameraMarker or not targetMarker then
 	return
 end
 
--- Keep the design markers visible in Studio edit mode, but hide them for the local player during play.
+-- Markers remain visible in Studio edit mode but disappear for the local player during play.
 cameraMarker.LocalTransparencyModifier = 1
 targetMarker.LocalTransparencyModifier = 1
 
